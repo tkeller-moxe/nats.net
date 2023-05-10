@@ -183,7 +183,7 @@ namespace NATS.Client
         // 60 second default flush timeout
         static readonly int DEFAULT_FLUSH_TIMEOUT = 10000;
 
-        TCPConnection conn = new TCPConnection();
+        ITCPConnection conn = new TCPConnection();
 
         SubChannelPool subChannelPool = null;
 
@@ -333,262 +333,6 @@ namespace NATS.Client
         }
 
         /// <summary>
-        /// Convenience class representing the TCP connection to prevent 
-        /// managing two variables throughout the NATs client code.
-        /// </summary>
-        private sealed class TCPConnection : IDisposable
-        {
-            /// A note on the use of streams.  .NET provides a BufferedStream
-            /// that can sit on top of an IO stream, in this case the network
-            /// stream. It increases performance by providing an additional
-            /// buffer.
-            /// 
-            /// So, here's what we have for writing:
-            ///     Client code
-            ///          ->BufferedStream (bw)
-            ///              ->NetworkStream/SslStream (srvStream)
-            ///                  ->TCPClient (srvClient);
-            ///                  
-            ///  For reading:
-            ///     Client code
-            ///          ->NetworkStream/SslStream (srvStream)
-            ///              ->TCPClient (srvClient);
-            /// 
-            object        mu        = new object();
-            TcpClient     client    = null;
-            NetworkStream stream    = null;
-            SslStream     sslStream = null;
-
-            string        hostName  = null;
-
-            internal void open(Srv s, int timeoutMillis)
-            {
-                lock (mu)
-                {
-                    // If a connection was lost during a reconnect we 
-                    // we could have a defunct SSL stream remaining and 
-                    // need to clean up.
-                    if (sslStream != null)
-                    {
-                        try
-                        {
-                            sslStream.Dispose();
-                        }
-                        catch (Exception) { }
-                        sslStream = null;
-                    }
-
-                    client = new TcpClient(Socket.OSSupportsIPv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork);
-                    if (Socket.OSSupportsIPv6)
-                        client.Client.DualMode = true;
-
-                    var task = client.ConnectAsync(s.Url.Host, s.Url.Port);
-                    // avoid raising TaskScheduler.UnobservedTaskException if the timeout occurs first
-                    task.ContinueWith(t => 
-                    {
-                        GC.KeepAlive(t.Exception);
-                        close(client);
-                    }, TaskContinuationOptions.OnlyOnFaulted);
-                    if (!task.Wait(TimeSpan.FromMilliseconds(timeoutMillis)))
-                    {
-                        close(client);
-                        client = null;
-                        throw new NATSConnectionException("timeout");
-                    }
-
-                    client.NoDelay = false;
-
-                    client.ReceiveBufferSize = defaultBufSize*2;
-                    client.SendBufferSize    = defaultBufSize;
-                    
-                    stream = client.GetStream();
-
-                    // save off the hostname
-                    hostName = s.Url.Host;
-                }
-            }
-
-            private static bool remoteCertificateValidation(
-                  object sender,
-                  X509Certificate certificate,
-                  X509Chain chain,
-                  SslPolicyErrors sslPolicyErrors)
-            {
-                if (sslPolicyErrors == SslPolicyErrors.None)
-                    return true;
-
-                return false;
-            }
-
-            internal static void close(TcpClient c)
-            {
-#if NET46
-                    c?.Close();
-#else
-                    c?.Dispose();
-#endif
-                c = null;
-            }
-
-            internal void makeTLS(Options options)
-            {
-                RemoteCertificateValidationCallback cb = null;
-
-                if (stream == null)
-                    throw new NATSException("Internal error:  Cannot create SslStream from null stream.");
-
-                cb = options.TLSRemoteCertificationValidationCallback;
-                if (cb == null)
-                    cb = remoteCertificateValidation;
-
-                sslStream = new SslStream(stream, false, cb, null,
-                    EncryptionPolicy.RequireEncryption);
-
-                try
-                {
-                    SslProtocols protocol = (SslProtocols)Enum.Parse(typeof(SslProtocols), "Tls12");
-                    sslStream.AuthenticateAsClientAsync(hostName, options.certificates, protocol, options.CheckCertificateRevocation).Wait();
-                }
-                catch (Exception ex)
-                {
-                    sslStream.Dispose();
-                    sslStream = null;
-
-                    close(client);
-                    client = null;
-                    throw new NATSConnectionException("TLS Authentication error", ex);
-                }
-            }
-
-            internal int SendTimeout
-            {
-                set
-                {
-                    if (client != null)
-                        client.SendTimeout = value;
-                }
-            }
-
-            internal int ReceiveTimeout
-            {
-                get
-                {
-                    if(client == null)
-                        throw new InvalidOperationException("Connection not properly initialized.");
-
-                    return client.ReceiveTimeout;
-                }
-                set
-                {
-                    if (client != null)
-                        client.ReceiveTimeout = value;
-                }
-            }
-
-            internal bool isSetup()
-            {
-                return (client != null);
-            }
-
-            internal void teardown()
-            {
-                TcpClient c;
-                Stream s;
-
-                lock (mu)
-                {
-                    c = client;
-                    s = getReadBufferedStream();
-
-                    client = null;
-                    stream = null;
-                    sslStream = null;
-                }
-
-                try
-                {
-                    if (s != null)
-                        s.Dispose();
-
-                    if (c != null)
-                        close(c);
-                }
-                catch (Exception) { }
-            }
-
-            internal Stream getReadBufferedStream()
-            {
-                if (sslStream != null)
-                    return sslStream;
-
-                return stream;
-            }
-
-            internal Stream getWriteBufferedStream(int size)
-            {
-
-                BufferedStream bs = null;
-                if (sslStream != null)
-                    bs = new BufferedStream(sslStream, size);
-                else
-                    bs = new BufferedStream(stream, size);
-
-                return bs;
-            }
-
-            internal bool Connected
-            {
-                get
-                {
-                    var tmp = client;
-                    if (tmp == null)
-                        return false;
-
-                    return tmp.Connected;
-                }
-            }
-
-            internal bool DataAvailable
-            {
-                get
-                {
-                    var tmp = stream;
-                    if (tmp == null)
-                        return false;
-
-                    return tmp.DataAvailable;
-                }
-            }
-
-            #region IDisposable Support
-            private bool disposedValue = false; // To detect redundant calls
-
-            void Dispose(bool disposing)
-            {
-                if (!disposedValue)
-                {
-                    if (sslStream != null)
-                        sslStream.Dispose();
-                    if (stream != null)
-                        stream.Dispose();
-                    if (client != null)
-                    {
-                        close(client);
-                        client = null;
-                    }
-
-                    disposedValue = true;
-                }
-            }
-
-            public void Dispose()
-            {
-                Dispose(true);
-            }
-            #endregion
-        }
-
-        /// <summary>
         /// The SubChannelPool class is used when the application
         /// has specified async subscribers will share channels and associated
         /// processing threads in the connection.  It simply returns a channel 
@@ -731,6 +475,11 @@ namespace NATS.Client
                 opts.ReconnectDelayHandler = DefaultReconnectDelayHandler;
             }
 
+            if(opts.TCPConnection != null)
+            {
+                conn = opts.TCPConnection;
+            }
+
             srvProvider = opts.ServerProvider ?? new ServerPool();
                 
             PING_P_BYTES = Encoding.UTF8.GetBytes(IC.pingProto);
@@ -826,7 +575,7 @@ namespace NATS.Client
             ex = null;
             try
             {
-                conn.open(s, opts.Timeout);
+                conn.open(s, this, opts.Timeout);
 
                 if (pending != null && bw != null)
                 {
@@ -855,7 +604,7 @@ namespace NATS.Client
         // makeSecureConn will wrap an existing Conn using TLS
         private void makeTLSConn()
         {
-            conn.makeTLS(this.opts);
+            conn.makeTLS();
 
             bw = conn.getWriteBufferedStream(defaultBufSize);
             br = conn.getReadBufferedStream();
