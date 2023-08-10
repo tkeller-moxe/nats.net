@@ -20,7 +20,7 @@ namespace NATSExamples
         /// 
         /// This "Custom" implementation just makes the connection TLS after opening it. 
         /// </summary>
-        public class CustomTCPConnection : TCPConnection
+        public class CustomTCPConnection : Connection.TCPConnection
         {
 
             public override void open(Srv s, Connection connection, int timeoutMillis)
