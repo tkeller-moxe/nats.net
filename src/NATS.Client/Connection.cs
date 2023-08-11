@@ -442,7 +442,7 @@ namespace NATS.Client
                 RemoteCertificateValidationCallback cb = null;
 
                 if (stream == null)
-                    throw new NATSException("public error:  Cannot create SslStream from null stream.");
+                    throw new NATSException("Internal error:  Cannot create SslStream from null stream.");
 
                 cb = options.TLSRemoteCertificationValidationCallback;
                 if (cb == null)
