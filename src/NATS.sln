@@ -116,7 +116,7 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JetStreamPushSubscribeAsyncQueueDurable", "Samples\JetStreamPushSubscribeAsyncQueueDurable\JetStreamPushSubscribeAsyncQueueDurable.csproj", "{5DCD0666-5AC9-462F-99BD-5E8E95E4B749}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimplificationQueue", "Samples\SimplificationQueue\SimplificationQueue.csproj", "{F8609197-D5B0-42CC-890E-921CAAA1589E}"
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TLSReverseProxyExample", "Samples\TLSReverseProxyExample\TLSReverseProxyExample.csproj", "{98C52074-7693-48D4-B0A9-48920EEEDA24}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TLSReverseProxyExample", "Samples\TLSReverseProxyExample\TLSReverseProxyExample.csproj", "{98C52074-7693-48D4-B0A9-48920EEEDA24}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
