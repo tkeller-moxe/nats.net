@@ -17,6 +17,7 @@ namespace NATSExamples
     {
         // 8444 is a port where the Terminating Proxy is listening
         static readonly string Url = "nats://192.168.1.108:8444";
+        // This is unsafe and assumes all certificates are good. 
         private static bool verifyServerCert(object sender,
             X509Certificate certificate, X509Chain chain,
             SslPolicyErrors sslPolicyErrors)
