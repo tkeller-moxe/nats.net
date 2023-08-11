@@ -355,7 +355,7 @@ namespace NATS.Client
             ///          ->NetworkStream/SslStream (srvStream)
             ///              ->TCPClient (srvClient);
             /// 
-            Connection natsConnection;
+            Options natsConnectionOptions;
 
             object mu = new object();
             TcpClient client = null;
@@ -364,9 +364,9 @@ namespace NATS.Client
 
             string hostName = null;
 
-            public virtual void open(Srv s, Connection connection, int timeoutMillis)
+            public virtual void open(Srv s, Options options)
             {
-                natsConnection = connection;
+                natsConnectionOptions = options;
 
                 lock (mu)
                 {
@@ -394,7 +394,7 @@ namespace NATS.Client
                         GC.KeepAlive(t.Exception);
                         close(client);
                     }, TaskContinuationOptions.OnlyOnFaulted);
-                    if (!task.Wait(TimeSpan.FromMilliseconds(timeoutMillis)))
+                    if (!task.Wait(TimeSpan.FromMilliseconds(options.Timeout)))
                     {
                         close(client);
                         client = null;
@@ -437,14 +437,14 @@ namespace NATS.Client
 
             public void makeTLS()
             {
-                Options options = natsConnection.Opts;
+                
 
                 RemoteCertificateValidationCallback cb = null;
 
                 if (stream == null)
                     throw new NATSException("Internal error:  Cannot create SslStream from null stream.");
 
-                cb = options.TLSRemoteCertificationValidationCallback;
+                cb = natsConnectionOptions.TLSRemoteCertificationValidationCallback;
                 if (cb == null)
                     cb = remoteCertificateValidation;
 
@@ -454,7 +454,7 @@ namespace NATS.Client
                 try
                 {
                     SslProtocols protocol = (SslProtocols)Enum.Parse(typeof(SslProtocols), "Tls12");
-                    sslStream.AuthenticateAsClientAsync(hostName, options.certificates, protocol, options.CheckCertificateRevocation).Wait();
+                    sslStream.AuthenticateAsClientAsync(hostName, natsConnectionOptions.certificates, protocol, natsConnectionOptions.CheckCertificateRevocation).Wait();
                 }
                 catch (Exception ex)
                 {
@@ -838,7 +838,7 @@ namespace NATS.Client
             ex = null;
             try
             {
-                conn.open(s, this, opts.Timeout);
+                conn.open(s, opts);
 
                 if (pending != null && bw != null)
                 {

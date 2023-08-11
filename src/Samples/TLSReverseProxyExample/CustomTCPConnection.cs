@@ -23,9 +23,9 @@ namespace NATSExamples
         public class CustomTCPConnection : Connection.TCPConnection
         {
 
-            public override void open(Srv s, Connection connection, int timeoutMillis)
+            public override void open(Srv s, Options options)
             {
-                base.open(s, connection, timeoutMillis);
+                base.open(s, options);
                 base.makeTLS();
             } 
         }
