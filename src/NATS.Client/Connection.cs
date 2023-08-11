@@ -355,7 +355,7 @@ namespace NATS.Client
             ///          ->NetworkStream/SslStream (srvStream)
             ///              ->TCPClient (srvClient);
             /// 
-            Options natsConnectionOptions;
+            Options options;
 
             object mu = new object();
             TcpClient client = null;
@@ -366,7 +366,7 @@ namespace NATS.Client
 
             public virtual void open(Srv s, Options options)
             {
-                natsConnectionOptions = options;
+                this.options = options;
 
                 lock (mu)
                 {
@@ -444,7 +444,7 @@ namespace NATS.Client
                 if (stream == null)
                     throw new NATSException("Internal error:  Cannot create SslStream from null stream.");
 
-                cb = natsConnectionOptions.TLSRemoteCertificationValidationCallback;
+                cb = options.TLSRemoteCertificationValidationCallback;
                 if (cb == null)
                     cb = remoteCertificateValidation;
 
@@ -454,7 +454,7 @@ namespace NATS.Client
                 try
                 {
                     SslProtocols protocol = (SslProtocols)Enum.Parse(typeof(SslProtocols), "Tls12");
-                    sslStream.AuthenticateAsClientAsync(hostName, natsConnectionOptions.certificates, protocol, natsConnectionOptions.CheckCertificateRevocation).Wait();
+                    sslStream.AuthenticateAsClientAsync(hostName, options.certificates, protocol, options.CheckCertificateRevocation).Wait();
                 }
                 catch (Exception ex)
                 {
